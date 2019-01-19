@@ -1,0 +1,110 @@
+---
+title: "Predicting Bond Interest Rates"
+author: "Nate Hoskin, Eric Sichak, Shivum Vora"
+date: "12/12/2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+The study of investment vehicles is, in many ways, the study of human psychology. It provides insight into a population's risk tolerance, market expectations, and worries for the future. Behind the supply and demand for these investments is everything the investor knows, as well as the fear of what he does not know. In order to predict a price or yield, a researcher must first discover the numerous drivers behind supply and demand. This reasoning directed the process of our research as we attempted to predict the yield on an investment grade bond.
+
+**What to Predict**
+
+To begin, we had to decide which investment vehicle we wanted to use for our model estimates. Our general options were: Equities, Bonds, Preferred Stock, and Alternatives. We decided against Equities because of the large variation between specific companies, industries, and sectors. There was no way to predict a single number that would reflect the supply and demand for company stock. Preferred Stock shares many of the same faults, with each company offering different yields and adjusting for varying levels of risk. Alternatives provide a unique standpoint on the demands for investment vehicles, as some Alternatives can actually be used to guage the future value of a vehicle. That said, these predictions are limited to a specific investment vehicle, and could not work when attempting to reflect supply and demand in the market as a whole.
+
+Having excluded other options, we were left with Bonds, the most diverse category of the four. Within Bonds, there are three bond issue types: Sovereign, Corporate, and Municipal. Sovereign bonds are issued by a country, Corporates by companies, and Munis by cities or states. Furthermore, each issue type is separated into several investment grades based on the risk of the issuing body. Of the three types, we chose to use Corporate Bonds. These bonds are the most liquid, closely tracked bonds, allowing us as researchers to access the largest range of information. Within Corporates, we decided to predict Investment Grade bonds.
+
+We decided to predict the yield on Investment Grade Corporate Bonds for several reasons. First, there are enough companies that fall within that category, meaning predicting this yield would provide insight into the largest percentage of the market. Second, the yield on these Bonds is closely monitored and recorded, allowing us to gather data on historical yields. Third, all companies with the same debt rating borrow at the same rate. This deducts the variation between companies, and allows us to predict a single yield for a wide range of Bonds. 
+
+**Selecting Predictors**
+
+Despite large amounts of information on bond trades, the data is incomplete. Because many bonds are traded in "private placements", not all supply and demand is recorded in daily trades and issuances. Without complete knowledge, we needed to develop a surrogate indicator for the supply and demand for bonds. This was the goal of our initial indicator selection.
+
+First, we classified bonds as luxury items, meaning bonds are purchased when both discretionary income and consumer sentiment are high. This closely links bond demand with the economic cycle. According to our theory, when the economy is expanding, bond demand would increase and vice versa. Using this we selected predictors that would indicate an expanding or contracting economy. Second, we determined which predictors would best correlate to both bond demand and economic expansion. The first to come to mind were discretionary income and GPD growth, both of which were included in our final models. We also chose the "meat and potatoes" of industry: energy. Energy demand forms the very base of economic direction, because all types of expansion or contraction will be reflected in energy production. Finally, we included the FOMC (Federal Open Market Committee) Target Rate, Effective Rate, and Prime Rate, all of which are components of the current borrowing rate. We know for a fact that these interest rates will have an effect on Corporate borrowing rates. 
+
+In total, we selected 27 predictors. We expected multi-colinearity, but we were still surprised with the result. What we had successfully created was a representation of the supply and demand for bonds based on the current state of the economy.
+```{r, fig.width=8, fig.height=6, fig.align = 'center'}
+InterestRates <- read.csv("310 Data Set.csv") 
+InterestRates <- InterestRates[-c(0:1)]
+set.seed(1861)
+
+# creating a correlation matrix
+library(corrplot)
+intCor <- cor(InterestRates)
+corrplot(intCor, method = "shade")
+```
+You may notice that the predictors that increase when an economy is expanding (energy production, GPD, etc) are negatively correlated with bond yield. The reason for this is that bond yield and bond price are inversely correlated. When a bond is in higher demand, the yield on the bond will be lower. When an economy is expanding, the demand (and therefore the price) is increasing, driving down the yield.
+
+## Elastic-Net Model Estimation
+**Narrowing Down Predictors**
+
+For reflecting the movements of the economy, we decided that all of these predictors were effective, but that doesn't necessarily mean they are best suited to the goal of predicting bond interest rates specifically. To separate the good from the bad, we decided to use an Elastic-Net Model. In order to optimize the model, we first used cross-validation to determine the best values of alpha and lambda to use when estimating the model.
+
+**Which Alpha?**
+
+```{r fig.width=12, fig.height=8, fig.align = 'center'}
+# Train/Validate Split
+trainSize <- .5
+trainInd <- sample(1:nrow(InterestRates), size = floor(nrow(InterestRates)*trainSize))
+
+trainDF <- InterestRates[trainInd,]
+validateDF <- InterestRates[-trainInd,]
+
+# Formula and X/Y Dataframes
+
+library(glmnetUtils)
+library(useful)
+intRateFormula <- as.formula(BAA~.)
+interestX <- build.x(intRateFormula, trainDF)
+interestY <- build.y(intRateFormula, trainDF)
+validateX <- build.x(intRateFormula, validateDF)
+
+# Cross Validation across Alpha Values
+
+alphaSeq <- seq(0,1, by = 0.01)
+alphaCV <- cva.glmnet(interestX, interestY, nfolds = 10, parallel = TRUE, alpha = alphaSeq)
+minlossplot(alphaCV, cv.type = "min")
+```
+
+By cross validating across values of alpha, we concluded that a Lasso model would be the model that negates the most CV loss.
+
+**Which Lambda?**
+
+```{r}
+elasticNetModel <- cv.glmnet(interestX, interestY, nfolds = 4, alpha = 1)
+plot(elasticNetModel)
+```
+
+Lambda.min selects 6 predictors to use, while Lambda.1se chooses 5. The difference between the two models is minimal, but both estimates show that very few predictors explain a large amount of the variation in bond interest rates. 
+
+**Elastic-Net Results**
+
+```{r}
+elasticPredict <- glmnet(interestX, interestY, alpha = .2)
+elasticNetPreds <- predict(elasticPredict, type = "response", newx = validateX, lambda = "lambda.1se")
+
+elasticNetMSE <- MSE(elasticNetPreds, validateDF$BAA)
+elasticNetRMSE <- RMSE(elasticNetPreds, validateDF$BAA)
+elasticNetMSE
+elasticNetRMSE
+```
+With a MSE of 58 basis points, 
+
+
+Predictions using Elastic-Net
+
+
+Linear Models
+
+
+
+Trees
+
+Clusters
+
+ETC.
